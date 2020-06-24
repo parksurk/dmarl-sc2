@@ -196,12 +196,15 @@ class ZergBasicAgent(base_agent.BaseAgent):
         return actions.FUNCTIONS.no_op()
 
 def main(unused_argv):
-    agent = ZergBasicAgent()
+    #agent = ZergBasicAgent()
+    agent = TerranBasicAgent()
     try:
         while True:
             with sc2_env.SC2Env(
-                    map_name="AbyssalReef",
-                    players=[sc2_env.Agent(sc2_env.Race.zerg),
+                    #map_name="AbyssalReef",
+                    map_name="Simple64",
+                    #players=[sc2_env.Agent(sc2_env.Race.zerg),
+                    players=[sc2_env.Agent(sc2_env.Race.terran),
                              sc2_env.Bot(sc2_env.Race.random,
                                          sc2_env.Difficulty.very_easy)],
                     agent_interface_format=features.AgentInterfaceFormat(
