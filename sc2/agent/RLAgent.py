@@ -28,8 +28,16 @@ smart_actions = [
     ACTION_SELECT_BARRACKS,
     ACTION_BUILD_MARINE,
     ACTION_SELECT_ARMY,
-    ACTION_ATTACK,
 ]
+
+#for mm_x in range(0, 64):
+#    for mm_y in range(0, 64):
+#        smart_actions.append(ACTION_ATTACK + '_' + str(mm_x) + '_' + str(mm_y))
+
+for mm_x in range(0, 64):
+    for mm_y in range(0, 64):
+        if (mm_x + 1) % 16 == 0 and (mm_y + 1) % 16 == 0:
+            smart_actions.append(ACTION_ATTACK + '_' + str(mm_x - 8) + '_' + str(mm_y - 8))
 
 KILL_UNIT_REWARD = 0.2
 KILL_BUILDING_REWARD = 0.5
@@ -95,11 +103,28 @@ class TerranRLAgent(base_agent.BaseAgent):
         self.previous_action = None
         self.previous_state = None
 
-    def transformLocation(self, x, x_distance, y, y_distance):
+    def transformDistance(self, x, x_distance, y, y_distance):
         if not self.base_top_left:
             return [x - x_distance, y - y_distance]
 
         return [x + x_distance, y + y_distance]
+
+    def transformLocation(self, x, y):
+        if not self.base_top_left:
+            return [64 - x, 64 - y]
+
+        return [x, y]
+
+    def getMeanLocation(self, unitList):
+        sum_x = 0
+        sum_y = 0
+        for unit in unitList:
+            sum_x += unit.x
+            sum_y += unit.y
+        mean_x = sum_x / len(unitList)
+        mean_y = sum_y / len(unitList)
+
+        return [mean_x, mean_y]
 
     def unit_type_is_selected(self, obs, unit_type):
         if (len(obs.observation.single_select) > 0 and
@@ -122,12 +147,12 @@ class TerranRLAgent(base_agent.BaseAgent):
     def step(self, obs):
         super(TerranRLAgent, self).step(obs)
 
-        time.sleep(0.5)
+        # time.sleep(0.5)
 
-        if self.base_top_left is None:
+        if obs.first():
             player_y, player_x = (
                     obs.observation.feature_minimap.player_relative == features.PlayerRelative.SELF).nonzero()
-            self.base_top_left = player_y.mean() <= 31
+            self.base_top_left = 1 if player_y.any() and player_y.mean() <= 31 else 0
 
         supply_depot_count = len(self.get_units_by_type(obs, units.Terran.SupplyDepot))
 
@@ -136,15 +161,48 @@ class TerranRLAgent(base_agent.BaseAgent):
         supply_limit = obs.observation.player.food_cap
         army_supply = obs.observation.player.food_used
 
-        killed_unit_score = obs.observation['score_cumulative'][5]
-        killed_building_score = obs.observation['score_cumulative'][6]
+        killed_unit_score = obs.observation.score_cumulative.killed_value_units
+        killed_building_score = obs.observation.score_cumulative.killed_value_structures
 
-        current_state = [
-            supply_depot_count,
-            barracks_count,
-            supply_limit,
-            army_supply,
-        ]
+#        current_state = np.zeros(5000)
+#        current_state[0] = supply_depot_count
+#        current_state[1] = barracks_count
+#        current_state[2] = supply_limit
+#        current_state[3] = army_supply
+#
+#        hot_squares = np.zeros(4096)
+#        enemy_y, enemy_x = (obs.observation.feature_minimap.player_relative == features.PlayerRelative.ENEMY).nonzero()
+#        for i in range(0, len(enemy_y)):
+#            y = int(enemy_y[i])
+#            x = int(enemy_x[i])
+#
+#            hot_squares[((y - 1) * 64) + (x - 1)] = 1
+#
+#        if not self.base_top_left:
+#            hot_squares = hot_squares[::-1]
+#
+#        for i in range(0, 4096):
+#            current_state[i + 4] = hot_squares[i]
+
+        current_state = np.zeros(20)
+        current_state[0] = supply_depot_count
+        current_state[1] = barracks_count
+        current_state[2] = supply_limit
+        current_state[3] = army_supply
+
+        hot_squares = np.zeros(16)
+        enemy_y, enemy_x = (obs.observation.feature_minimap.player_relative == features.PlayerRelative.ENEMY).nonzero()
+        for i in range(0, len(enemy_y)):
+            y = int(math.ceil((enemy_y[i] + 1) / 16))
+            x = int(math.ceil((enemy_x[i] + 1) / 16))
+
+            hot_squares[((y - 1) * 4) + (x - 1)] = 1
+
+        if not self.base_top_left:
+            hot_squares = hot_squares[::-1]
+
+        for i in range(0, 16):
+            current_state[i + 4] = hot_squares[i]
 
         if self.previous_action is not None:
             reward = 0
@@ -165,22 +223,29 @@ class TerranRLAgent(base_agent.BaseAgent):
         self.previous_state = current_state
         self.previous_action = rl_action
 
+        x = 0
+        y = 0
+        if '_' in smart_action:
+            smart_action, x, y = smart_action.split('_')
+
         if smart_action == ACTION_DO_NOTHING:
             return actions.FUNCTIONS.no_op()
 
         elif smart_action == ACTION_SELECT_SCV:
-            scvs = self.get_units_by_type(obs, units.Terran.SCV)
-            if len(scvs) > 0:
-                scv = random.choice(scvs)
-                return actions.FUNCTIONS.select_point("select_all_type", (scv.x,
-                                                                          scv.y))
+            if self.can_do(obs, actions.FUNCTIONS.select_point.id):
+                scvs = self.get_units_by_type(obs, units.Terran.SCV)
+                if len(scvs) > 0:
+                    scv = random.choice(scvs)
+                    if scv.x >= 0 and scv.y >= 0:
+                        return actions.FUNCTIONS.select_point("select", (scv.x,
+                                                                         scv.y))
 
         elif smart_action == ACTION_BUILD_SUPPLY_DEPOT:
             if self.can_do(obs, actions.FUNCTIONS.Build_SupplyDepot_screen.id):
                 ccs = self.get_units_by_type(obs, units.Terran.CommandCenter)
                 if len(ccs) > 0:
-                    cc = random.choice(ccs)
-                    target = self.transformLocation(cc.x, 0, cc.y, 20)
+                    mean_x, mean_y = self.getMeanLocation(ccs)
+                    target = self.transformDistance(int(mean_x), 0, int(mean_y), 20)
 
                     return actions.FUNCTIONS.Build_SupplyDepot_screen("now", target)
 
@@ -188,17 +253,19 @@ class TerranRLAgent(base_agent.BaseAgent):
             if self.can_do(obs, actions.FUNCTIONS.Build_Barracks_screen.id):
                 ccs = self.get_units_by_type(obs, units.Terran.CommandCenter)
                 if len(ccs) > 0:
-                    cc = random.choice(ccs)
-                    target = self.transformLocation(cc.x, 20, cc.y, 0)
+                    mean_x, mean_y = self.getMeanLocation(ccs)
+                    target = self.transformDistance(int(mean_x), 20, int(mean_y), 0)
 
                     return actions.FUNCTIONS.Build_Barracks_screen("now", target)
 
         elif smart_action == ACTION_SELECT_BARRACKS:
-            barracks = self.get_units_by_type(obs, units.Terran.Barracks)
-            if len(barracks) > 0:
-                barrack = random.choice(barracks)
-                return actions.FUNCTIONS.select_point("select_all_type", (barrack.x,
-                                                                          barrack.y))
+            if self.can_do(obs, actions.FUNCTIONS.select_point.id):
+                barracks = self.get_units_by_type(obs, units.Terran.Barracks)
+                if len(barracks) > 0:
+                    barrack = random.choice(barracks)
+                    if barrack.x >= 0 and barrack.y >= 0:
+                        return actions.FUNCTIONS.select_point("select", (barrack.x,
+                                                                         barrack.y))
 
         elif smart_action == ACTION_BUILD_MARINE:
             if self.can_do(obs, actions.FUNCTIONS.Train_Marine_quick.id):
@@ -209,11 +276,10 @@ class TerranRLAgent(base_agent.BaseAgent):
                 return actions.FUNCTIONS.select_army("select")
 
         elif smart_action == ACTION_ATTACK:
-            if self.can_do(obs, actions.FUNCTIONS.Attack_minimap.id):
-                if self.base_top_left:
-                    return actions.FUNCTIONS.Attack_minimap("now", [39, 45])
-                else:
-                    return actions.FUNCTIONS.Attack_minimap("now", [21, 24])
+            # if self.can_do(obs, actions.FUNCTIONS.Attack_minimap.id):
+            if not self.unit_type_is_selected(obs, units.Terran.SCV) and self.can_do(obs,
+                                                                                     actions.FUNCTIONS.Attack_minimap.id):
+                return actions.FUNCTIONS.Attack_minimap("now", self.transformLocation(int(x), int(y)))
 
         return actions.FUNCTIONS.no_op()
 
