@@ -11,6 +11,8 @@ from pysc2.env import sc2_env
 from pysc2.lib import actions, features, units
 from absl import app
 
+DATA_FILE = 'rlagent_learning_data'
+
 ACTION_DO_NOTHING = 'donothing'
 ACTION_SELECT_SCV = 'selectscv'
 ACTION_BUILD_SUPPLY_DEPOT = 'buildsupplydepot'
@@ -58,7 +60,7 @@ class QLearningTable:
         if np.random.uniform() < self.epsilon:
             # choose best action
             # state_action = self.q_table.ix[observation, :]
-            state_action = self.q_table.loc[observation, self.q_table.columns[:]]
+            state_action = self.q_table.loc[observation, :]
 
             # some actions have the same value
             state_action = state_action.reindex(np.random.permutation(state_action.index))
@@ -77,7 +79,7 @@ class QLearningTable:
         # q_predict = self.q_table.ix[s, a]
         q_predict = self.q_table.loc[s, a]
         # q_target = r + self.gamma * self.q_table.ix[s_, :].max()
-        q_target = r + self.gamma * self.q_table.loc[s_, self.q_table.columns[:]].max()
+        q_target = r + self.gamma * self.q_table.loc[s_, :].max()
 
         # update
         # self.q_table.ix[s, a] += self.lr * (q_target - q_predict)
@@ -102,6 +104,9 @@ class TerranRLAgent(base_agent.BaseAgent):
 
         self.previous_action = None
         self.previous_state = None
+
+        if os.path.isfile(DATA_FILE + '.gz'):
+            self.qlearn.q_table = pd.read_pickle(DATA_FILE + '.gz', compression='gzip')
 
     def transformDistance(self, x, x_distance, y, y_distance):
         if not self.base_top_left:
@@ -128,12 +133,12 @@ class TerranRLAgent(base_agent.BaseAgent):
 
     def unit_type_is_selected(self, obs, unit_type):
         if (len(obs.observation.single_select) > 0 and
-                obs.observation.single_select[0].unit_type == unit_type):
-            return True
+            obs.observation.single_select[0].unit_type == unit_type):
+              return True
 
         if (len(obs.observation.multi_select) > 0 and
-                obs.observation.multi_select[0].unit_type == unit_type):
-            return True
+            obs.observation.multi_select[0].unit_type == unit_type):
+              return True
 
         return False
 
@@ -147,11 +152,13 @@ class TerranRLAgent(base_agent.BaseAgent):
     def step(self, obs):
         super(TerranRLAgent, self).step(obs)
 
-        # time.sleep(0.5)
+        #time.sleep(0.5)
+
+        if obs.last():
+            self.qlearn.q_table.to_pickle(DATA_FILE + '.gz', 'gzip')
 
         if obs.first():
-            player_y, player_x = (
-                    obs.observation.feature_minimap.player_relative == features.PlayerRelative.SELF).nonzero()
+            player_y, player_x = (obs.observation.feature_minimap.player_relative == features.PlayerRelative.SELF).nonzero()
             self.base_top_left = 1 if player_y.any() and player_y.mean() <= 31 else 0
 
         supply_depot_count = len(self.get_units_by_type(obs, units.Terran.SupplyDepot))
@@ -238,7 +245,7 @@ class TerranRLAgent(base_agent.BaseAgent):
                     scv = random.choice(scvs)
                     if scv.x >= 0 and scv.y >= 0:
                         return actions.FUNCTIONS.select_point("select", (scv.x,
-                                                                         scv.y))
+                                                                              scv.y))
 
         elif smart_action == ACTION_BUILD_SUPPLY_DEPOT:
             if self.can_do(obs, actions.FUNCTIONS.Build_SupplyDepot_screen.id):
@@ -265,7 +272,7 @@ class TerranRLAgent(base_agent.BaseAgent):
                     barrack = random.choice(barracks)
                     if barrack.x >= 0 and barrack.y >= 0:
                         return actions.FUNCTIONS.select_point("select", (barrack.x,
-                                                                         barrack.y))
+                                                                              barrack.y))
 
         elif smart_action == ACTION_BUILD_MARINE:
             if self.can_do(obs, actions.FUNCTIONS.Train_Marine_quick.id):
@@ -276,9 +283,8 @@ class TerranRLAgent(base_agent.BaseAgent):
                 return actions.FUNCTIONS.select_army("select")
 
         elif smart_action == ACTION_ATTACK:
-            # if self.can_do(obs, actions.FUNCTIONS.Attack_minimap.id):
-            if not self.unit_type_is_selected(obs, units.Terran.SCV) and self.can_do(obs,
-                                                                                     actions.FUNCTIONS.Attack_minimap.id):
+            #if self.can_do(obs, actions.FUNCTIONS.Attack_minimap.id):
+            if not self.unit_type_is_selected(obs, units.Terran.SCV) and self.can_do(obs, actions.FUNCTIONS.Attack_minimap.id):
                 return actions.FUNCTIONS.Attack_minimap("now", self.transformLocation(int(x), int(y)))
 
         return actions.FUNCTIONS.no_op()
