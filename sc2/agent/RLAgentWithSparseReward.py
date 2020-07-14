@@ -356,7 +356,7 @@ def main(unused_argv):
                     agent_interface_format=features.AgentInterfaceFormat(
                       feature_dimensions=features.Dimensions(screen=84, minimap=64),
                       use_feature_units=True),
-                    step_mul=1,
+                    step_mul=8,
                     game_steps_per_episode=0,
                     visualize=True) as env:
 
