@@ -111,7 +111,14 @@ If you'd like to learn more about version control and using `git` from the comma
 	...
 	```
 
-6. That's it! Now all of the `cv-nd` libraries are available to you. Assuming you're environment is still activated, you can navigate to the Exercises repo and start looking at the notebooks:
+6. Create an IPython kernel for the 'starcraft2' environment.
+
+	```
+	pip install ipykernel
+	python -m ipykernel install --user --name starcraft2 --display-name "starcraft2"
+	```
+
+7. That's it! Now all of the `cv-nd` libraries are available to you. Assuming you're environment is still activated, you can navigate to the Exercises repo and start looking at the notebooks:
 
 	```
 	cd
