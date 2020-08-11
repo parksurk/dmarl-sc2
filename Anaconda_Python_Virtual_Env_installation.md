@@ -80,6 +80,7 @@ If you'd like to learn more about version control and using `git` from the comma
 	At this point your command line should look something like: `(starcraft2) <User>:dmarl-sc2 <user>$`. The `(starcraft2)` indicates that your environment has been activated, and you can proceed with further package installations.
 
 3. Install PyTorch and torchvision; this should install the latest version of PyTorch.
+	-	Please, refer to the PyTorch Installation Guide : https://pytorch.org/get-started/locally/
 
 	- __Linux__ or __Mac__:
 	```
@@ -87,8 +88,7 @@ If you'd like to learn more about version control and using `git` from the comma
 	```
 	- __Windows__:
 	```
-	conda install pytorch-cpu -c pytorch
-	pip install torchvision
+	conda install pytorch torchvision cpuonly -c pytorch
 	```
 4.	Install TensorFlow; this should install the latest version of TensorFlow.
 
