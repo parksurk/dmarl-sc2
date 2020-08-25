@@ -1,1 +1,16 @@
-# dmarl-sc2
+# 구현내용 설명
+
+[Github URL]
+- https://github.com/kmh03214/dmarl-sc2
+
+[구현 내용 설명]
+- 베이스라인 코드에 구현 되어있는 Terran 베이스라인 코드의 건물 build 순서를 조정
+    Refinery 건설 -> supply건설 -> barrack건설 ->
+    Marine 생산 -> Factory건설 -> Hellion 유닛 생산 -> 인구수 30 이상시 공격하는 코드를 구현
+
+Q1. 놀고있는 SCV를 찾고 싶었는데, IDLE 함수가 actions.FUNCTIONS.select_idle_worker 에 있는 것 같은데,
+해당 함수를 이용 할 줄 몰라서 구현이 어려웠습니다.
+
+Q2. Refinery를 건설 후 Gas를 채집하는데, SCV를 1마리 이상을 넣고 싶은데, 잘 구현이 안되었습니다.
+
+Q3. async 함수 및 await를 사용하여 비동기구현을 할 수는 없는건가요?
