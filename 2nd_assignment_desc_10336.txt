@@ -1,5 +1,5 @@
 [Github URL]
-- 
+- https://github.com/kmh03214/dmarl-sc2
 
 [구현 내용 설명]
 - 베이스라인 코드에 구현 되어있는 Terran 베이스라인 코드의 건물 build 순서를 조정
