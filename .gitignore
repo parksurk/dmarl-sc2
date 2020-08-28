@@ -109,3 +109,6 @@ ENV/
 # App, Exe
 *.app
 *.exe
+
+#tensorboard
+runs/
