@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-
+import random
 
 class NaiveDQN(nn.Module):
 
@@ -27,8 +27,9 @@ class NaiveDQN(nn.Module):
         qs = self.qnet(state)  # Notice that qs is 2d tensor [batch x action]
 
         if self.train:  # epsilon-greedy policy
-            prob = np.random.uniform(0.0, 1.0, 1)
-            if torch.from_numpy(prob).float() <= self.epsilon:  # random
+            #prob = np.random.uniform(0.0, 1.0, 1)
+            #if torch.from_numpy(prob).float() <= self.epsilon:  # random
+            if random.random() <= self.epsilon: # random
                 action = np.random.choice(range(self.action_dim))
             else:  # greedy
                 action = qs.argmax(dim=-1)
@@ -57,68 +58,4 @@ class NaiveDQN(nn.Module):
         loss.backward()
         self.opt.step()
 
-
-if __name__ == '__main__':
-
-    import gym
-    from skdrl.pytorch.model.mlp import NaiveMultiLayerPerceptron
-
-
-    class EMAMeter:
-
-        def __init__(self,
-                     alpha: float = 0.5):
-            self.s = None
-            self.alpha = alpha
-
-        def update(self, y):
-            if self.s is None:
-                self.s = y
-            else:
-                self.s = self.alpha * y + (1 - self.alpha) * self.s
-
-
-    env = gym.make('CartPole-v1')
-    s_dim = env.observation_space.shape[0]
-    a_dim = env.action_space.n
-
-    qnet = NaiveMultiLayerPerceptron(input_dim=s_dim,
-               output_dim=a_dim,
-               num_neurons=[128],
-               hidden_act='ReLU',
-               out_act='Identity')
-
-    agent = NaiveDQN(state_dim=s_dim,
-                     action_dim=a_dim,
-                     qnet=qnet,
-                     lr=1e-4,
-                     gamma=1.0,
-                     epsilon=1.0)
-
-    n_eps = 10000
-    print_every = 500
-    ema_factor = 0.5
-    ema = EMAMeter(ema_factor)
-
-    for ep in range(n_eps):
-        env.reset()  # restart environment
-        cum_r = 0
-        while True:
-            s = env.state
-            s = torch.tensor(s).float().view(1, 4)  # convert to torch.tensor
-            a = agent.get_action(s)
-            ns, r, done, info = env.step(a)
-
-            ns = torch.tensor(ns).float()  # convert to torch.tensor
-            agent.update_sample(s, a, r, ns, done)
-            cum_r += r
-            if done:
-                ema.update(cum_r)
-
-                if ep % print_every == 0:
-                    print("Episode {} || EMA: {} || EPS : {}".format(ep, ema.s, agent.epsilon))
-
-                if ep >= 150:
-                    agent.epsilon *= 0.999
-                break
-    env.close()
+        return loss

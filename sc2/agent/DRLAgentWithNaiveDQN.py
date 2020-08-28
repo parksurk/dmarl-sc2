@@ -12,39 +12,15 @@ from pysc2.env import sc2_env, run_loop
 from pysc2.lib import actions, features, units
 from absl import app
 
-# reference from https://github.com/MorvanZhou/Reinforcement-learning-with-tensorflow
-class QLearningTable:
-    def __init__(self, actions, learning_rate=0.01, reward_decay=0.9):
-        self.actions = actions
-        self.learning_rate = learning_rate
-        self.reward_decay = reward_decay
-        self.q_table = pd.DataFrame(columns=self.actions, dtype=np.float64)
+import torch
+from torch.utils.tensorboard import SummaryWriter
 
-    def choose_action(self, observation, e_greedy=0.9):
-        self.check_state_exist(observation)
-        if np.random.uniform() < e_greedy:
-            state_action = self.q_table.loc[observation, :]
-            action = np.random.choice(
-              state_action[state_action == np.max(state_action)].index)
-        else:
-            action = np.random.choice(self.actions)
-        return action
+from skdrl.pytorch.model.mlp import NaiveMultiLayerPerceptron
+from skdrl.pytorch.model.naivedqn import NaiveDQN
+from skdrl.pytorch.util.train_util import EMAMeter
 
-    def learn(self, s, a, r, s_):
-        self.check_state_exist(s_)
-        q_predict = self.q_table.loc[s, a]
-        if s_ != 'terminal':
-            q_target = r + self.reward_decay * self.q_table.loc[s_, :].max()
-        else:
-            q_target = r
-        self.q_table.loc[s, a] += self.learning_rate * (q_target - q_predict)
-
-    def check_state_exist(self, state):
-        if state not in self.q_table.index:
-            self.q_table = self.q_table.append(pd.Series([0] * len(self.actions),
-                                                       index=self.q_table.columns,
-                                                       name=state))
-
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+writer = SummaryWriter()
 
 class TerranAgentWithRawActsAndRawObs(base_agent.BaseAgent):
     actions = ("do_nothing",
@@ -166,22 +142,47 @@ class TerranAgentWithRawActsAndRawObs(base_agent.BaseAgent):
                 "now", marine.tag, (attack_xy[0] + x_offset, attack_xy[1] + y_offset))
         return actions.RAW_FUNCTIONS.no_op()
 
-
 class TerranRandomAgent(TerranAgentWithRawActsAndRawObs):
     def step(self, obs):
         super(TerranRandomAgent, self).step(obs)
         action = random.choice(self.actions)
         return getattr(self, action)(obs)
 
-
 class TerranRLAgentWithRawActsAndRawObs(TerranAgentWithRawActsAndRawObs):
     def __init__(self):
         super(TerranRLAgentWithRawActsAndRawObs, self).__init__()
-        self.qlearn = QLearningTable(self.actions)
+
+        self.s_dim = 21
+        self.a_dim = 6
+        self.lr = 1e-4
+        self.gamma = 1.0
+        self.epsilon = 1.0
+
+        self.qnetwork = NaiveMultiLayerPerceptron(input_dim=self.s_dim,
+                           output_dim=self.a_dim,
+                           num_neurons=[128],
+                           hidden_act_func='ReLU',
+                           out_act_func='Identity').to(device)
+
+        self.data_file = 'rlagent_with_naive_dqn'
+        if os.path.isfile(self.data_file + '.pt'):
+            self.qnetwork.load_state_dict(torch.load(self.data_file + '.pt'))
+
+        self.dqn = NaiveDQN(state_dim=self.s_dim,
+                             action_dim=self.a_dim,
+                             qnet=self.qnetwork,
+                             lr=self.lr,
+                             gamma=self.gamma,
+                             epsilon=self.epsilon).to(device)
+
+        self.print_every = 50
+        self.ema_factor = 0.5
+        self.ema = EMAMeter(self.ema_factor)
+        self.cum_reward = 0
+        self.cum_loss = 0
+        self.episode_count = 0
+
         self.new_game()
-        self.data_file = 'rlagent_with_raw_acts_and_obs_learning_data'
-        if os.path.isfile(self.data_file + '.gz'):
-            self.qlearn.q_table = pd.read_pickle(self.data_file + '.gz', compression='gzip')
 
     def reset(self):
         super(TerranRLAgentWithRawActsAndRawObs, self).reset()
@@ -191,6 +192,8 @@ class TerranRLAgentWithRawActsAndRawObs(TerranAgentWithRawActsAndRawObs):
         self.base_top_left = None
         self.previous_state = None
         self.previous_action = None
+        self.cum_reward = 0
+        self.cum_loss = 0
 
     def get_state(self, obs):
         scvs = self.get_my_units_by_type(obs, units.Terran.SCV)
@@ -253,21 +256,38 @@ class TerranRLAgentWithRawActsAndRawObs(TerranAgentWithRawActsAndRawObs):
 
         #time.sleep(0.5)
 
-        state = str(self.get_state(obs))
-        action = self.qlearn.choose_action(state)
+        state = self.get_state(obs)
+        state = torch.tensor(state).float().view(1, self.s_dim).to(device)
+        action_idx = self.dqn.choose_action(state)
+        action = self.actions[action_idx]
+        done = True if obs.last() else False
         if self.previous_action is not None:
-            self.qlearn.learn(self.previous_state,
-                              self.previous_action,
-                              obs.reward,
-                              'terminal' if obs.last() else state)
+            loss = self.dqn.learn(self.previous_state.to(device),
+                              torch.tensor(self.previous_action).view(1, 1).to(device),
+                              torch.tensor(obs.reward).view(1, 1).to(device),
+                              state.to(device),
+                              torch.tensor(done).float().view(1, 1).to(device)
+                              )
+            self.cum_loss += loss.detach().numpy()
+        self.cum_reward += obs.reward
         self.previous_state = state
-        self.previous_action = action
+        self.previous_action = action_idx
 
         if obs.last():
-            self.qlearn.q_table.to_pickle(self.data_file + '.gz', 'gzip')
+            self.episode_count = self.episode_count + 1
+            torch.save(self.dqn.qnet.state_dict(), self.data_file + '.pt')
+
+            self.ema.update(self.cum_reward)
+            writer.add_scalar("Loss/online", self.cum_loss/obs.observation.game_loop, self.episode_count)
+            writer.add_scalar("Score", self.ema.s, self.episode_count)
+
+            if self.episode_count % self.print_every == 0:
+                print("Episode {} || EMA: {} || EPS : {}".format(self.episode_count, self.ema.s, self.dqn.epsilon))
+
+            if self.episode_count >= 150:
+                self.dqn.epsilon *= 0.999
 
         return getattr(self, action)(obs)
-
 
 # def main(unused_argv):
 #    agent1 = TerranRLAgentWithRawActsAndRawObs()
@@ -319,7 +339,6 @@ class TerranRLAgentWithRawActsAndRawObs(TerranAgentWithRawActsAndRawObs):
 #     except KeyboardInterrupt:
 #         pass
 
-
 # def main(unused_argv):
 #     agent = TerranRLAgentWithRawActsAndRawObs()
 #     try:
@@ -352,6 +371,7 @@ class TerranRLAgentWithRawActsAndRawObs(TerranAgentWithRawActsAndRawObs):
 #
 #     except KeyboardInterrupt:
 #         pass
+
 
 def main(unused_argv):
    agent1 = TerranRLAgentWithRawActsAndRawObs()
