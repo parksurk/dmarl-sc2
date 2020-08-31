@@ -1,5 +1,3 @@
-# 구현내용 설명
-
 [Github URL]
 - https://github.com/kmh03214/dmarl-sc2
 
