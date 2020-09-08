@@ -155,14 +155,14 @@ class TerranRLAgentWithRawActsAndRawObs(TerranAgentWithRawActsAndRawObs):
         self.s_dim = 21
         self.a_dim = 6
 
-        self.lr = 1e-4 * 5
-        self.batch_size = 256
-        self.gamma = 1.0
-        self.memory_size = 50000
-        self.eps_max = 0.08
+        self.lr = 1e-4 * 1
+        self.batch_size = 32
+        self.gamma = 0.99
+        self.memory_size = 200000
+        self.eps_max = 1.0
         self.eps_min = 0.01
         self.epsilon = 1.0
-        self.init_sampling = 2000
+        self.init_sampling = 4000
         self.target_update_interval = 10
 
         self.data_file_qnet = 'rlagent_with_vanilla_dqn_qnet'
@@ -220,7 +220,7 @@ class TerranRLAgentWithRawActsAndRawObs(TerranAgentWithRawActsAndRawObs):
 
         # epsilon scheduling
         # slowly decaying_epsilon
-        self.epsilon = max(self.eps_min, self.eps_max - self.eps_min * (self.episode_count / 200))
+        self.epsilon = max(self.eps_min, self.eps_max - self.eps_min * (self.episode_count / 50))
         self.dqn.epsilon = torch.tensor(self.epsilon).to(device)
 
 
