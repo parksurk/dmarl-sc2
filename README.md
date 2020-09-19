@@ -34,3 +34,40 @@ Q1. 시점을 이동하면서 건물이 지어질 위치를 조절해보고 싶�
 Q2. 건물을 짓고나서 쉬고 있는 SCV를 다시... 자원을 캐도록 하고 싶은데 잘 안되네요...
 
 Q3. 감사합니다!!
+
+# 4주차
+# [구현 내용 설명]
+
+- 없음, 기존 Base codeline 실행
+
+# Final Project
+# [구현해야 할 것]
+
+## 주의사항
+---
+
+actions 추가할때마다
+모델 action space dim 1증가
+
+---
+
+1. Refinery base_top_left 일때 / 아닐때 (4 by 4) (OK)
+
+2. CommandCenter(앞마당) (OK)
+
+3. Train_SCV (OK)
+    - scv수 제한
+
+4. Build_Supply_randomly / Build_Barracks_randomly ( OK )
+
+5. Attack point 변경 (OK)
+
+6. Attack_ALL
+    - Attack All 할 때 함수에, 생산유닛 추가될 때마다 추가 (OK)
+    - 20이상일 때 공격
+
+7. build_Factory
+
+9. Reward Function 정의
+
+10. DQN 정의
