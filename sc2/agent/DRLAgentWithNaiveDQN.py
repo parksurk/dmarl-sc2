@@ -166,7 +166,7 @@ class TerranRLAgentWithRawActsAndRawObs(TerranAgentWithRawActsAndRawObs):
 
         self.data_file = 'rlagent_with_naive_dqn'
         if os.path.isfile(self.data_file + '.pt'):
-            self.qnetwork.load_state_dict(torch.load(self.data_file + '.pt'))
+            self.qnetwork.load_state_dict(torch.load(self.data_file + '.pt', map_location=device))
 
         self.dqn = NaiveDQN(state_dim=self.s_dim,
                              action_dim=self.a_dim,

@@ -181,10 +181,10 @@ class TerranRLAgentWithRawActsAndRawObs(TerranAgentWithRawActsAndRawObs):
                            out_act_func='Identity').to(device)
 
         if os.path.isfile(self.data_file_qnet + '.pt'):
-            self.qnetwork.load_state_dict(torch.load(self.data_file_qnet + '.pt'))
+            self.qnetwork.load_state_dict(torch.load(self.data_file_qnet + '.pt', map_location=device))
 
         if os.path.isfile(self.data_file_qnet_target + '.pt'):
-            self.qnetwork_target.load_state_dict(torch.load(self.data_file_qnet_target + '.pt'))
+            self.qnetwork_target.load_state_dict(torch.load(self.data_file_qnet_target + '.pt', map_location=device))
 
         # initialize target network same as the main network.
         self.qnetwork_target.load_state_dict(self.qnetwork.state_dict())
