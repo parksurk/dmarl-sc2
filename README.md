@@ -85,7 +85,7 @@
 - StarCraft2 Wiki - List of StarCraft II units : https://starcraft.fandom.com/wiki/List_of_StarCraft_II_units
 - FastCampus '모델 성능 개선으로 익히는 강화학습 A-Z 올인원 패키지 Online' 과정
 
-## Course Coach Contact & Infomation
+## Course Coach Contact & Information
 - 박석 / Park, Surk
 - E-mail : parksurk@gmail.com
 - Gihhub : https://github.com/parksurk
